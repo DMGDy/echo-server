@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define BUFF_SIZE 1048
 
@@ -40,11 +41,15 @@ main(void)
 
 	// 8 max connections to be waiting
 	listen(sock_conn, 8);
+	printf("Listening with INADDR_ANY with port 8080...\n");
 	int client = accept(sock_conn, 0, 0);
+	printf("New connection accepted\n");
 
 	char buff[BUFF_SIZE] = { 0 };
 	// receive client request
 	ssize_t n = recv(client,buff,BUFF_SIZE,0);
+	printf("Received a message\n");
+	printf("%s",buff);
 	if(n < 0) 
 	{
 		perror("Read error");
@@ -52,11 +57,11 @@ main(void)
 	}
 	// check if message is complete, this implementation a complete message ends with '\n'
 	int finished = 0;
-	int offset = n;
-	if(finished)
+	int size = n;
+	while(!finished)
 	{
 		// check if agreed upon '\n' deliminating end of message is within buffer
-		for(ssize_t i = 0; i < n; ++i)
+		for(ssize_t i = 0; i < size; ++i)
 		{
 			if(buff[i] == '\n')
 			{
@@ -65,8 +70,47 @@ main(void)
 			}
 			
 		}
-		n = recv(sock_conn, buff + offset, BUFF_SIZE - offset, 0);
-		offset += n;
+		if(finished)
+		{
+			break;
+		}
+
+		n = recv(sock_conn, buff + size, BUFF_SIZE - size, 0);
+		size += n;
+
 	}
+	// now that message is 100% received (as long as '\n' was sent), send message back to echo
+	printf("Received %zd bytes with following message: %s", size, buff);
+	printf("Now echoing message back...\n");
+	n = send(client, buff, size, 0);
+	if(n < 0)
+	{
+		perror("Send error");
+		exit(2);
+	}
+	
+	if(n < size)
+	{
+		finished = 0;
+	}
+
+	// if not finished sending all data, keep sending, increasing size until done
+	size = n;
+	while(!finished)
+	{
+		n = send(sock_conn, buff + size, size, 0);
+		if(n == 0) 
+		{
+			finished = 1;
+			break;
+		}
+		size += n;
+	}
+	printf("%zd bytes sent\n", size);
+
+	close(sock_conn);
+	close(client);
+
+	printf("Closing server\n");
 	return 0;
 }
