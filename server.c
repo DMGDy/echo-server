@@ -28,12 +28,14 @@
 #include <semaphore.h>
 
 #define BUFF_SIZE 1048
+#define MAX_CONN 8
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
 	int client;
 	int* counter;
+	sem_t* conn_sem;
 }thread_args_t;
 
 void* conn_handler(void* args);
@@ -43,6 +45,8 @@ conn_handler(void* args)
 {
 	int client = ((thread_args_t*)args)->client;
 	int* counter = ((thread_args_t*)args)->counter;
+	sem_t* conn_sem = ((thread_args_t*)args)->conn_sem;
+
 	while(1)
 	{
 
@@ -120,6 +124,7 @@ conn_handler(void* args)
 		}
 		printf("%zd bytes sent\n", size);
 	}
+	sem_post(conn_sem);
 }
 
 int
@@ -136,8 +141,15 @@ main(void)
 	
 	int message_count = 0;
 
+	sem_t conn_sem;
+	if(sem_init(&conn_sem, 0, MAX_CONN) < 0)
+	{
+		perror("Error initializing semaphore");
+		exit(-1);
+	}
+
 	// 8 max connections to be waiting
-	listen(sock_conn, 8);
+	listen(sock_conn, MAX_CONN);
 	printf("Listening with INADDR_ANY with port 8080...\n");
 	int client;
 	while(client = accept(sock_conn, 0, 0))
@@ -146,9 +158,11 @@ main(void)
 		pthread_t thread;
 		thread_args_t args = {
 			client,
-			&message_count
+			&message_count,
+			&conn_sem
 		};
 		
+		sem_wait(&conn_sem);
 		if(pthread_create(&thread, NULL, conn_handler, (void*) &args) > 0)
 		{
 			perror("Error creating new thread");
@@ -159,6 +173,7 @@ main(void)
 	
 	}
 
+	sem_destroy(&conn_sem);
 	close(sock_conn);
 
 	close(client);
