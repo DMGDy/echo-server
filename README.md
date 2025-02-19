@@ -13,4 +13,4 @@ make all
 
 1. [X] Implement Basic echo functionality on both client and server
 2. [X] Concurrently handle multiple clients with multi-threading
-3. [ ] Use semaphore to assign to threads to track maximum client connections
+3. [X] Use semaphore to assign to threads to track maximum client connections
