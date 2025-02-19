@@ -25,15 +25,24 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #define BUFF_SIZE 1048
 
-void* conn_handler(void* socket);
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+typedef struct {
+	int client;
+	int* counter;
+}thread_args_t;
+
+void* conn_handler(void* args);
 
 void*
-conn_handler(void* socket)
+conn_handler(void* args)
 {
-	int client = *(int*)socket;
+	int client = ((thread_args_t*)args)->client;
+	int* counter = ((thread_args_t*)args)->counter;
 	while(1)
 	{
 
@@ -75,6 +84,13 @@ conn_handler(void* socket)
 			size += n;
 	
 		}
+		// place lock on counter and increment
+		pthread_mutex_lock(&mutex);
+		(*counter)++;
+		pthread_mutex_unlock(&mutex);
+
+		printf("Total messages received: %d\n", *counter);
+
 		// now that message is 100% received (as long as '\n' was sent), send message back to echo
 		printf("Received %zd bytes with following message: %s", size, buff);
 		printf("Now echoing message back...\n");
@@ -117,6 +133,8 @@ main(void)
 
 	int sock_conn = socket(AF_INET,SOCK_STREAM,0);
 	bind(sock_conn, (struct sockaddr*)&addr, sizeof(addr));
+	
+	int message_count = 0;
 
 	// 8 max connections to be waiting
 	listen(sock_conn, 8);
@@ -126,8 +144,12 @@ main(void)
 	{
 		printf("New connection accepted\n");
 		pthread_t thread;
+		thread_args_t args = {
+			client,
+			&message_count
+		};
 		
-		if(pthread_create(&thread, NULL, conn_handler, (void*) &client) > 0)
+		if(pthread_create(&thread, NULL, conn_handler, (void*) &args) > 0)
 		{
 			perror("Error creating new thread");
 			exit(5);
