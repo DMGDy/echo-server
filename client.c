@@ -23,83 +23,96 @@ main(void)
 		exit(1);
 	}
 
-	// read string from user
-	char* buff = NULL;
-	size_t b = 0;
-	size_t n = getline(&buff, &b, stdin);
-	if(n == -1)
+	// sustain connection and keep echoing
+	while(1)
 	{
-		perror("Error reading stdin");
-		exit(2);
-	}
-
-	ssize_t sent = send(sock_conn, buff, n, 0);
-	if(sent < 0)
-	{
-		perror("Error sending");
-		exit(3);
-	}
+		// read string from user
+		char* buff = NULL;
+		size_t b = 0;
+		printf("Enter message to echo:\n");
+		size_t n = getline(&buff, &b, stdin);
+		if(n == -1)
 	
-	// if less bytes sent than length of buffer, not all sent
-	int finished = 1;
-	if(sent != n)
-	{
-		finished = 0;
-	}
-
-	printf("Sending %zu bytes\n", n);
-	printf("finished == %d\n", finished);
-	// send until the sent is equal to the buffer size (n)
-	while(!finished)
-	{
-		printf("here\n");
-		sent += send(sock_conn, buff + sent, n - sent, 0);
-		printf("sent: %zd, n: %zd", sent, n);
-		if(sent == n)
 		{
-			finished = 1;
-			break;
+			perror("Error reading stdin");
+			exit(2);
 		}
 	
-	}
-	printf("%zd bytes of data have been sent\n", sent);
-
-	// expect the same message back
-	char rec_buff[BUFF_SIZE] = { 0 };
-	
-	ssize_t rec_size = recv(sock_conn, rec_buff, BUFF_SIZE, 0);
-	if(rec_size < 0)
-	{
-		perror("Read error");
-		exit(4);
-	}
-	
-	finished = 0;
-	while(!finished)
-	{
-		for(ssize_t i = 0; i < rec_size; ++i)
+		ssize_t sent = send(sock_conn, buff, n, 0);
+		if(sent < 0)
 		{
-			if(rec_buff[i] == '\n')
+			perror("Error sending");
+			exit(3);
+		}
+		
+		// if less bytes sent than length of buffer, not all sent
+		int finished = 1;
+		if(sent != n)
+		{
+			finished = 0;
+		}
+	
+		printf("Sending %zu bytes\n", n);
+		// send until the sent is equal to the buffer size (n)
+		while(!finished)
+		{
+			printf("here\n");
+			sent += send(sock_conn, buff + sent, n - sent, 0);
+			printf("sent: %zd, n: %zd", sent, n);
+			if(sent == n)
 			{
 				finished = 1;
 				break;
 			}
-			if(!finished)
-			{
-				ssize_t n_rec = recv(sock_conn,
-							rec_buff + rec_size,
-							BUFF_SIZE - rec_size,
-							0
-						     );
-				// error to be handled here
-				rec_size += n_rec;
-			}
+		
 		}
-	}
-		printf("%zd bytes received back with message:\n%s", rec_size, rec_buff);
+		printf("%zd bytes of data have been sent\n", sent);
 	
+		fflush(stdout);
+		// expect the same message back
+		char rec_buff[BUFF_SIZE] = { 0 };
+		
+		ssize_t rec_size = recv(sock_conn, rec_buff, BUFF_SIZE, 0);
+		fflush(stdout);
+		if(rec_size < 0)
+		{
+			perror("Read error");
+			exit(4);
+		}
+		printf("%s\n", rec_buff);
+		
+		if(rec_size != n)
+		{
+		
+			finished = 0;
+		}
+		while(!finished)
+		{
+			for(ssize_t i = 0; i < rec_size; ++i)
+			{
+				if(rec_buff[i] == '\n')
+				{
+					finished = 1;
+					break;
+				}
+				if(!finished)
+				{
+					ssize_t n_rec = recv(sock_conn,
+								rec_buff + rec_size,
+								BUFF_SIZE - rec_size,
+								0
+							     );
+					// error to be handled here
+					rec_size += n_rec;
+				}
+			}
+			printf("%d\n", finished);
+		}
+		printf("%zd bytes received back with message:\n%s\n", rec_size, rec_buff);
+		free(buff);
+	}
+
 	close(sock_conn);
-	free(buff);
 
 	return 0;
 }
