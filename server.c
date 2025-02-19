@@ -24,38 +24,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define BUFF_SIZE 1048
 
-int
-main(void)
+void* conn_handler(void* socket);
+
+void*
+conn_handler(void* socket)
 {
-	struct sockaddr_in addr = {
-		AF_INET,
-		htons(8080),
-		INADDR_ANY
-	};
-
-	int sock_conn = socket(AF_INET,SOCK_STREAM,0);
-	bind(sock_conn, (struct sockaddr*)&addr, sizeof(addr));
-
-	// 8 max connections to be waiting
-	listen(sock_conn, 8);
-	printf("Listening with INADDR_ANY with port 8080...\n");
-	int client = accept(sock_conn, 0, 0);
+	int client = *(int*)socket;
 	while(1)
 	{
-		printf("New connection accepted\n");
-	
+
 		char buff[BUFF_SIZE] = { 0 };
 		// receive client request
 		ssize_t n = recv(client,buff,BUFF_SIZE,0);
 		printf("Received a message\n");
-		printf("%s",buff);
 		if(n < 0) 
 		{
 			perror("Read error");
 			exit(1);
+		} else if(n == 0) 
+		{
+			printf("Closing connection\n");
+			close(client);
+			break;
 		}
 		// check if message is complete, this implementation a complete message ends with '\n'
 		int finished = 0;
@@ -77,7 +71,7 @@ main(void)
 				break;
 			}
 	
-			n = recv(sock_conn, buff + size, BUFF_SIZE - size, 0);
+			n = recv(client, buff + size, BUFF_SIZE - size, 0);
 			size += n;
 	
 		}
@@ -100,7 +94,7 @@ main(void)
 		size = n;
 		while(!finished)
 		{
-			n = send(sock_conn, buff + size, size, 0);
+			n = send(client, buff + size, size, 0);
 			if(n == 0) 
 			{
 				finished = 1;
@@ -109,6 +103,37 @@ main(void)
 			size += n;
 		}
 		printf("%zd bytes sent\n", size);
+	}
+}
+
+int
+main(void)
+{
+	struct sockaddr_in addr = {
+		AF_INET,
+		htons(8080),
+		INADDR_ANY
+	};
+
+	int sock_conn = socket(AF_INET,SOCK_STREAM,0);
+	bind(sock_conn, (struct sockaddr*)&addr, sizeof(addr));
+
+	// 8 max connections to be waiting
+	listen(sock_conn, 8);
+	printf("Listening with INADDR_ANY with port 8080...\n");
+	int client;
+	while(client = accept(sock_conn, 0, 0))
+	{
+		printf("New connection accepted\n");
+		pthread_t thread;
+		
+		if(pthread_create(&thread, NULL, conn_handler, (void*) &client) > 0)
+		{
+			perror("Error creating new thread");
+			exit(5);
+		}
+		printf("Thread created for client connection\n");
+	
 	
 	}
 
